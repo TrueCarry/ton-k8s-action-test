@@ -34,4 +34,8 @@ jobs:
 
       # Runs a set of commands using the runners shell
       - name: Run a multi-line script
-        run: ./healthcheck.sh
+        run: |
+          until $(curl --output /dev/null --silent --fail http://localhost:8082/api/v2/getMasterchainInfo); do
+              printf '.'
+              sleep 5
+          done
