@@ -1,0 +1,112 @@
+version: '3.4'
+
+services:
+  genesis:
+    container_name: genesis
+    image: truecarry/ton-k8s:ton-node-mainnet
+    environment:
+      - GENESIS=true
+      - PRIVATE_CONFIG=false
+      - PUBLIC_IP=172.28.1.1
+      - DHT_PORT=6302
+      - AUTO_VALIDATOR=false
+    volumes:
+      - genesis:/var/ton-work/db
+      - config:/var/ton-work/network
+    env_file:
+      - 'genesis-common.env'
+
+  dht-server:
+    container_name: dht-server
+    image: truecarry/ton-k8s:ton-node-mainnet
+    environment:
+      - DHT_PORT=6302
+      - PRIVATE_CONFIG=true
+    volumes:
+      - genesis:/var/ton-work/db
+      - config:/var/ton-work/network
+    env_file:
+      - 'genesis-common.env'
+    depends_on:
+      - "genesis"
+    networks:
+      default:
+        ipv4_address: 172.28.1.1
+
+  validator:
+    container_name: validator
+    image: truecarry/ton-k8s:ton-node-mainnet
+    volumes:
+      - genesis:/var/ton-work/db
+      - config:/var/ton-work/network
+    restart: always
+    depends_on:
+      - "genesis"
+      - "dht-server"
+    environment:
+      - GENESIS_VALIDATOR=true
+      - PRIVATE_CONFIG=true
+    env_file:
+      - 'genesis-common.env'
+
+  http-config:
+    container_name: http-conifg
+    image: truecarry/ton-k8s:ton-http-config
+    restart: always
+    environment:
+      - PUBLIC_PORT=8081
+    ports:
+      - 8081:8081
+    volumes:
+      - config:/var/ton-work/network
+    depends_on:
+      - "genesis"
+      - "dht-server"
+
+  toncenter:
+    container_name: http-toncenter
+    image: truecarry/ton-k8s:ton-toncenter-mainnet
+    restart: always
+    ports:
+      - 8082:8082
+    volumes:
+      - config:/var/ton-work/network
+    environment:
+      - CONFIG=http://http-config:8081/config.json
+      - PUBLIC_PORT=8082
+    env_file:
+      - 'toncenter.env'
+    depends_on:
+      - "genesis"
+      - "dht-server"
+      - "http-config"
+
+  ownnet-node:
+    image: truecarry/ton-k8s:ton-node-mainnet
+    restart: always
+    volumes:
+      - config:/var/ton-work/network
+    depends_on:
+      - "genesis"
+      - "validator"
+      - "http-config"
+    environment:
+      - CONFIG=http://http-config:6666/config.json
+    env_file:
+      - 'genesis-common.env'
+    deploy:
+      replicas: 1 # up to 50 validators (check gen-zerostate, wallets count)
+
+
+volumes:
+  config:
+    external: false
+  genesis:
+    external: false
+
+networks:
+  default:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
