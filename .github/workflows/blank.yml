@@ -48,3 +48,5 @@ jobs:
               attempt_counter=$(($attempt_counter+1))
               sleep 5
           done
+      - name: Get masterchain info
+        run: curl http://localhost:8082/getMasterchainInfo
